@@ -3,5 +3,5 @@ protostar-version = "0.8.1"
 lib-path = "lib"
 
 [contracts]
-main = ["src/main.cairo"]
-
+logic = ["src/main.cairo"]
+proxy = ["openzeppelin/upgrades/presets/Proxy.cairo"]
