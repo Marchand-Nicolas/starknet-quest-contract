@@ -3,10 +3,8 @@
 %lang starknet
 
 // Starkware dependencies
-from starkware.cairo.common.cairo_builtins import HashBuiltin
+from starkware.cairo.common.cairo_builtins import HashBuiltin, SignatureBuiltin
 from starkware.cairo.common.uint256 import Uint256
-from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.math import unsigned_div_rem
 
 // Project dependencies
 from openzeppelin.access.ownable.library import Ownable
@@ -14,37 +12,36 @@ from openzeppelin.introspection.erc165.library import ERC165
 from openzeppelin.token.erc721.library import ERC721
 from openzeppelin.upgrades.library import Proxy
 
+// Local dependencies
+from src.library import Quest
+
 //
-// Constructor
+// Initializer
 //
 
-@constructor
-func constructor{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    name: felt, symbol: felt, owner: felt
+@external
+func initializer{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    name: felt, symbol: felt, owner: felt, proxy_admin: felt, public_key: felt
 ) {
+    // Desc:
+    //   Initialize the contract with the name, symbol, owner and proxy admin.
+    // Implicit args:
+    //   syscall_ptr(felt*)
+    //   pedersen_ptr(HashBuiltin*)
+    //   range_check_ptr
+    // Explicit args:
+    //   name(felt): Name of the token
+    //   symbol(felt): Symbol of the token
+    //   owner(felt): Owner address
+    //   proxy_admin(felt): Proxy admin address
+    //   public_key(felt): Public key of the signer
+    // Returns:
+    //   None
     ERC721.initializer(name, symbol);
     Ownable.initializer(owner);
+    Proxy.initializer(proxy_admin);
+    Quest.initializer(public_key);
     return ();
-}
-
-//
-// Storage
-//
-
-@storage_var
-func _freeId() -> (id : Uint256) {
-}
-
-@storage_var
-func _quests(tokenId : Uint256, id : felt) -> (quest_id : felt) {
-}
-
-@storage_var
-func _admin() -> (address : felt) {
-}
-
-@storage_var
-func _immutable() -> (immutable : felt) {
 }
 
 //
@@ -52,38 +49,32 @@ func _immutable() -> (immutable : felt) {
 //
 
 @view
+func getFreeId{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (id : Uint256) {
+    return Quest.getFreeId();
+}
+
+@view
+func getImmutable{
+        syscall_ptr: felt*,
+        pedersen_ptr: HashBuiltin*,
+        range_check_ptr
+    }() -> (immutable : felt) {
+    return Quest.getImmutable();
+}
+
+@view
+func getPublicKey{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (publicKey : felt) {
+    return Quest.getPublicKey();
+}
+
+@view
 func getProgress{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(tokenId : Uint256) -> (progress_len : felt, progress : felt*) {
-    alloc_locals;
-    let (arr) = alloc();
-    let (len, progress) = getQuestProgress(tokenId, 0, arr, 0);
-    return (len, arr);
-}
-
-func getQuestProgress{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(tokenId: Uint256, arr_len : felt, arr : felt*, id : felt) -> (progress_len : felt, progress : felt*) {
-    let (questId) = _quests.read(tokenId, id);
-    if (questId == 0) {
-        return (arr_len, arr);
-    } else {
-        assert [arr + arr_len] = questId;
-        let (progress_len, progress) = getQuestProgress(tokenId, arr_len + 1, arr, id + 1);
-        return (progress_len, progress);
-    }
+    return Quest.getProgress(tokenId);
 }
 
 @view
-func hasCompletedQuest{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(tokenId : Uint256, questId : felt) -> (completed : felt) {
-    alloc_locals;
-    let (arr) = alloc();
-    let completed = hasCompletedQuestLoop(tokenId, 0, questId);
-    return completed;
-}
-
-@view
-func getLevel{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(tokenId : Uint256) -> (level : felt) {
-    alloc_locals;
-    let (arr) = alloc();
-    let level = getLevelLoop(tokenId, 0, 0);
-    return level;
+func getLevel{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(tokenId: Uint256) -> (level : felt) {
+    return Quest.getLevel(tokenId);
 }
 
 @view
@@ -92,12 +83,7 @@ func tokenURI{
         pedersen_ptr: HashBuiltin*,
         range_check_ptr
     }(tokenId: Uint256) -> (tokenURI_len: felt, tokenURI: felt*) {
-    alloc_locals;
-    let (urlLength, defaultUrl) = getUrl();
-    let (level) = getLevel(tokenId);
-    let (tokenURI_len: felt, tokenURI: felt*) = append_felt_as_ascii(urlLength, defaultUrl, level);
-    let array = tokenURI - tokenURI_len;
-    return (tokenURI_len=tokenURI_len, tokenURI=array);
+    return Quest.tokenURI(tokenId);
 }
 
 @view
@@ -156,6 +142,30 @@ func owner{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() ->
 //
 
 @external
+func mint{pedersen_ptr: HashBuiltin*, syscall_ptr: felt*, range_check_ptr}() {
+    return Quest.mint();
+}
+
+@external
+func setImmutable{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    return Quest.setImmutable();
+}
+
+@external
+func setPublicKey{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(public_key: felt) {
+    return Quest.setPublicKey(public_key);
+}
+
+@external
+func completeQuest{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, ecdsa_ptr : SignatureBuiltin*}(
+    questId : felt,
+    tokenId: Uint256,
+    sig : (felt, felt)
+) {
+    return Quest.completeQuest(questId, tokenId, sig);
+}
+
+@external
 func approve{pedersen_ptr: HashBuiltin*, syscall_ptr: felt*, range_check_ptr}(
     to: felt, tokenId: Uint256
 ) {
@@ -184,15 +194,6 @@ func safeTransferFrom{pedersen_ptr: HashBuiltin*, syscall_ptr: felt*, range_chec
     from_: felt, to: felt, tokenId: Uint256, data_len: felt, data: felt*
 ) {
     ERC721.safe_transfer_from(from_, to, tokenId, data_len, data);
-    return ();
-}
-
-@external
-func mint{pedersen_ptr: HashBuiltin*, syscall_ptr: felt*, range_check_ptr}(
-    to: felt, tokenId: Uint256
-) {
-    Ownable.assert_only_owner();
-    ERC721._mint(to, tokenId);
     return ();
 }
 
@@ -292,95 +293,4 @@ func setAdmin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     Proxy.assert_only_admin();
     Proxy._set_admin(newAdmin);
     return ();
-}
-
-//
-// Internals
-//
-
-func append_felt_as_ascii {
-        syscall_ptr: felt*,
-        pedersen_ptr: HashBuiltin*,
-        range_check_ptr
-    }(arr_len : felt, arr : felt*, number : felt) -> (
-        ptr_len : felt, ptr : felt*) {
-    alloc_locals;
-    let (q, r) = unsigned_div_rem(number, 10);
-    if (q == 0 and r == 0) {
-        return (arr_len, arr + arr_len);
-    }
-
-    let (ptr_len, ptr) = append_felt_as_ascii(arr_len, arr, q);
-    assert [ptr] = r + 48;
-    return (ptr_len + 1, ptr + 1);
-}
-
-func hasCompletedQuestLoop{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(tokenId : Uint256, id : felt, targetQuestId : felt) -> (completed : felt) {
-    let (questId) = _quests.read(tokenId, id);
-    if (questId == targetQuestId) {
-        return (completed=1);
-    } else {
-        if (questId == 0) {
-            return (completed=0);
-        } else {
-            let completed = hasCompletedQuestLoop(tokenId, id + 1, targetQuestId);
-            return completed;
-        }
-    }
-}
-
-func getLevelLoop{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(tokenId: Uint256, level : felt, id : felt) -> (level : felt) {
-    let (questId) = _quests.read(tokenId, id);
-    if (questId == 0) {
-        return (level=level);
-    } else {
-        let (level) = getLevelLoop(tokenId, level + 1, id + 1);
-        return (level=level);
-    }
-}
-
-func getUrl() -> (url_len : felt, url : felt*) {
-    alloc_locals;
-    let (url) = alloc();
-    assert [url] = 104;
-    assert [url + 1] = 116;
-    assert [url + 2] = 116;
-    assert [url + 3] = 112;
-    assert [url + 4] = 115;
-    assert [url + 5] = 58;
-    assert [url + 6] = 47;
-    assert [url + 7] = 47;
-    assert [url + 8] = 113;
-    assert [url + 9] = 117;
-    assert [url + 10] = 101;
-    assert [url + 11] = 115;
-    assert [url + 12] = 116;
-    assert [url + 13] = 45;
-    assert [url + 14] = 97;
-    assert [url + 15] = 112;
-    assert [url + 16] = 105;
-    assert [url + 17] = 46;
-    assert [url + 18] = 115;
-    assert [url + 19] = 116;
-    assert [url + 20] = 97;
-    assert [url + 21] = 114;
-    assert [url + 22] = 107;
-    assert [url + 23] = 110;
-    assert [url + 24] = 101;
-    assert [url + 25] = 116;
-    assert [url + 26] = 46;
-    assert [url + 27] = 105;
-    assert [url + 28] = 100;
-    assert [url + 29] = 47;
-    assert [url + 30] = 113;
-    assert [url + 31] = 117;
-    assert [url + 32] = 101;
-    assert [url + 33] = 115;
-    assert [url + 34] = 116;
-    assert [url + 35] = 45;
-    assert [url + 36] = 108;
-    assert [url + 37] = 118;
-    assert [url + 38] = 108;
-    assert [url + 39] = 47;
-    return (40, url);
 }
